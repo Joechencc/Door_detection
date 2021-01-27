@@ -1,0 +1,36 @@
+{
+    "os": "Linux-5.4.0-64-generic-x86_64-with-glibc2.27",
+    "python": "3.8.7",
+    "heartbeatAt": "2021-01-22T22:36:27.602106",
+    "startedAt": "2021-01-22T22:36:26.471973",
+    "docker": null,
+    "cpu_count": 16,
+    "cuda": null,
+    "args": [
+        "--data",
+        "./data/door.yaml",
+        "--batch",
+        "4",
+        "--epochs",
+        "30",
+        "--cfg",
+        "./models/yolov5s.yaml",
+        "--weights",
+        "yolov5s.pt",
+        "--name",
+        "yolov5s_door",
+        "--cache"
+    ],
+    "state": "running",
+    "codePath": "train.py",
+    "program": "train.py",
+    "git": {
+        "remote": "https://github.com/ultralytics/yolov5.git",
+        "commit": "1445ab2b279a87f04d83ac4342142a11c878dc35"
+    },
+    "email": null,
+    "root": "/home/cchen/Desktop/yolov5",
+    "host": "cchen-Precision-5540",
+    "username": "cchen",
+    "executable": "/usr/bin/python3.8"
+}

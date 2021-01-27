@@ -1,0 +1,8 @@
+train: ./data/DOOR/images/train/  # 16551 images
+val: ./data/DOOR/images/val/  # 4952 images
+
+# number of classes
+nc: 4
+
+# class names
+names: [ 'door', 'handle', 'cabinet door', 'refrigerator door' ]
