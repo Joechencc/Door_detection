@@ -86,7 +86,7 @@ def detect(save_img=False):
     
     vid_path, vid_writer = None, None
     #if webcam:
-    #    view_img = True
+    view_img = True
     #    cudnn.benchmark = True  # set True to speed up constant image size inference
     #    dataset_color = LoadStreams(source, img_size=imgsz)
         #dataset_color = LoadStreams(str(4), img_size=imgsz)
@@ -111,16 +111,15 @@ def detect(save_img=False):
         depth_image = np.asanyarray(depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
         #print("color_image::::"+str(color_image))
-        im0s = color_image.copy()
-        im1s = depth_image.copy()
+
+        im0s = np.expand_dims(color_image, axis=0)
+        im1s = np.expand_dims(depth_image, axis=0)
 
         # Letterbox
         s = np.stack([letterbox(x, new_shape=imgsz)[0].shape for x in im0s], 0)  # inference shapes
         rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equal
         im0 = [letterbox(x, new_shape=imgsz, auto=rect)[0] for x in im0s]
-        print("im01::::"+str(im0))
         im0 = np.stack(im0, 0)
-        print("im02::::"+str(im0.shape))
         im0 = im0[:, :, :, ::-1].transpose(0, 3, 1, 2)  # BGR to RGB, to bsx3x416x416
         im0 = np.ascontiguousarray(im0)
 
@@ -130,7 +129,7 @@ def detect(save_img=False):
         depth_to_color_extrin = depth_frame.profile.get_extrinsics_to(color_frame.profile)
         #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
         #_,_,im1s,_ = dataset_depth
-        img = torch.from_numpy(img).to(device)
+        img = torch.from_numpy(im0).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
@@ -150,15 +149,14 @@ def detect(save_img=False):
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
-            if webcam:  # batch_size >= 1
-                p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset_color.count
-                _, _, im1, _ = path[i], '%g: ' % i, im1s[i].copy(), dataset_depth.count
-            else:
-                p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
+            #if webcam:  # batch_size >= 1
+            s, im0 = '%g: ' % i, im0s[i].copy()
+            #else:
+             #   p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
 
-            p = Path(p)  # to Path
-            save_path = str(save_dir / p.name)  # img.jpg
-            txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset_color.mode == 'image' else f'_{frame}')  # img.txt
+            #p = Path(p)  # to Path
+            #save_path = str(save_dir / p.name)  # img.jpg
+            #txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset_color.mode == 'image' else f'_{frame}')  # img.txt
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             if len(det):
@@ -189,7 +187,7 @@ def detect(save_img=False):
                         
                         #print("xyxy"+str(int(xyxy[0])))
                         print("////////////////////////////////////")
-                        plot_one_box(xyxy, im1, label=label, color=colors[int(cls)], line_thickness=3)
+                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -197,7 +195,8 @@ def detect(save_img=False):
             # Stream results
             if view_img:
                 pass
-                cv2.imshow(str(p), im1)
+                window_name = 'image'
+                cv2.imshow(window_name, im0)
 
             # Save results (image with detections)
             if save_img:
