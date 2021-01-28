@@ -47,8 +47,8 @@ def detect(save_img=False):
     if webcam:
         view_img = True
         cudnn.benchmark = True  # set True to speed up constant image size inference
-        dataset_color = LoadStreams(str(4), img_size=imgsz)
-        dataset_depth = LoadStreams(str(2), img_size=imgsz)
+        dataset_color = LoadStreams(source, img_size=imgsz)
+        #dataset_depth = LoadStreams(str(2), img_size=imgsz)
     else:
         save_img = True
         dataset_color = LoadImages(source, img_size=imgsz)
@@ -61,9 +61,11 @@ def detect(save_img=False):
     t0 = time.time()
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
-    for (path, img, im0s, vid_cap),(_, _, im1s, _) in zip(dataset_color,dataset_depth):
+    for path, img, im0s, vid_cap in dataset_color:
         #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
         #_,_,im1s,_ = dataset_depth
+        print("img::::::"+str(img.shape))
+        print("im0s::::::"+str(im0s.shape))
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -86,7 +88,6 @@ def detect(save_img=False):
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset_color.count
-                _, _, im1, _ = path[i], '%g: ' % i, im1s[i].copy(), dataset_depth.count
             else:
                 p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
 
@@ -116,14 +117,14 @@ def detect(save_img=False):
                         label = f'{names[int(cls)]} {conf:.2f}'
                         print("////////////////////////////////////")
                         try:
-                            new_image = im1[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
+                            new_image = im0[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
                             #cv2.imshow(str(p),new_image)
                         except:
                             pass
                         
                         #print("xyxy"+str(int(xyxy[0])))
                         print("////////////////////////////////////")
-                        plot_one_box(xyxy, im1, label=label, color=colors[int(cls)], line_thickness=3)
+                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -131,7 +132,7 @@ def detect(save_img=False):
             # Stream results
             if view_img:
                 pass
-                cv2.imshow(str(p), im1)
+                cv2.imshow(str(p), im0)
 
             # Save results (image with detections)
             if save_img:
