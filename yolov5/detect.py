@@ -13,6 +13,7 @@ from utils.general import check_img_size, check_requirements, non_max_suppressio
     xyxy2xywh, strip_optimizer, set_logging, increment_path
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
+import pyrealsense2 as rs     
 
 
 def detect(save_img=False):
@@ -46,10 +47,11 @@ def detect(save_img=False):
     if webcam:
         view_img = True
         cudnn.benchmark = True  # set True to speed up constant image size inference
-        dataset = LoadStreams(source, img_size=imgsz)
+        dataset_color = LoadStreams(str(4), img_size=imgsz)
+        dataset_depth = LoadStreams(str(2), img_size=imgsz)
     else:
         save_img = True
-        dataset = LoadImages(source, img_size=imgsz)
+        dataset_color = LoadImages(source, img_size=imgsz)
 
     # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
@@ -59,7 +61,9 @@ def detect(save_img=False):
     t0 = time.time()
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
-    for path, img, im0s, vid_cap in dataset:
+    for (path, img, im0s, vid_cap),(_, _, im1s, _) in zip(dataset_color,dataset_depth):
+        #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
+        #_,_,im1s,_ = dataset_depth
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -81,13 +85,14 @@ def detect(save_img=False):
         # Process detections
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
-                p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
+                p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset_color.count
+                _, _, im1, _ = path[i], '%g: ' % i, im1s[i].copy(), dataset_depth.count
             else:
-                p, s, im0, frame = path, '', im0s, getattr(dataset, 'frame', 0)
+                p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
 
             p = Path(p)  # to Path
             save_path = str(save_dir / p.name)  # img.jpg
-            txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
+            txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset_color.mode == 'image' else f'_{frame}')  # img.txt
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             if len(det):
@@ -111,14 +116,14 @@ def detect(save_img=False):
                         label = f'{names[int(cls)]} {conf:.2f}'
                         print("////////////////////////////////////")
                         try:
-                            new_image = im0[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
-                            cv2.imshow(str(p),new_image)
+                            new_image = im1[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
+                            #cv2.imshow(str(p),new_image)
                         except:
                             pass
                         
                         #print("xyxy"+str(int(xyxy[0])))
                         print("////////////////////////////////////")
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        plot_one_box(xyxy, im1, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -126,11 +131,11 @@ def detect(save_img=False):
             # Stream results
             if view_img:
                 pass
-                # cv2.imshow(str(p), im0)
+                cv2.imshow(str(p), im1)
 
             # Save results (image with detections)
             if save_img:
-                if dataset.mode == 'image':
+                if dataset_color.mode == 'image':
                     cv2.imwrite(save_path, im0)
                 else:  # 'video'
                     if vid_path != save_path:  # new video

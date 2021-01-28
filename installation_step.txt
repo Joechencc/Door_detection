@@ -29,3 +29,29 @@ https://docs.google.com/presentation/d/1zsXERhgQbWxfLzMBeXV2zVJwN4W75H1IlqU3muIy
 
 python3.8 detect.py --source 4 --weights best.pt
 
+
+pyrealsense2 in python3.8
+
+
+    Update CMake using this method
+    (You need to have curl installed for this to work. )
+
+    Download the zip file from https://github.com/IntelRealSense/librealsense/releases/. I am using version 2.38.1
+
+    Extract the file, cd into the extracted file .
+
+    Create a dir called build and cd into it.
+
+    Run the CMake command to test to see if the build will work.
+    cmake ../ -DFORCE_RSUSB_BACKEND=ON -DBUILD_PYTHON_BINDINGS:bool=true -DPYTHON_EXECUTABLE=/usr/bin/python3.8 -DCMAKE_BUILD_TYPE=release -DBUILD_EXAMPLES=true -DBUILD_GRAPHICAL_EXAMPLES=true 
+
+If you have issues with the above step, check out this, this and this
+
+    Still in the build dir. Run make -j4 and then sudo make install.
+
+    Add these to the end of your .bashrc file
+
+export PATH=$PATH:~/.local/bin
+export PYTHONPATH=$PYTHONPATH:/usr/local/lib
+export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.8/pyrealsense2
+
