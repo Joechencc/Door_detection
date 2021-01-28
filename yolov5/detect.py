@@ -6,6 +6,7 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
+import numpy as np
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
@@ -13,7 +14,6 @@ from utils.general import check_img_size, check_requirements, non_max_suppressio
     xyxy2xywh, strip_optimizer, set_logging, increment_path
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
-import pyrealsense2 as rs     
 
 
 def detect(save_img=False):
@@ -64,6 +64,8 @@ def detect(save_img=False):
     for (path, img, im0s, vid_cap),(_, _, im1s, _) in zip(dataset_color,dataset_depth):
         #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
         #_,_,im1s,_ = dataset_depth
+        #print("im0s::::::::"+str(np.asanyarray(im0s).shape))
+        #print("im0::::::::"+str(im0.shape))
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
