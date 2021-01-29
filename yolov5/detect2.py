@@ -55,6 +55,16 @@ def detect(save_img=False):
     config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
     profile = pipe.start(config)
+
+    depth_sensor = profile.get_device().first_depth_sensor()
+    depth_scale = depth_sensor.get_depth_scale()
+    print("Depth Scale is:::::::::::::::::::::::::::::; " , depth_scale)
+
+    clipping_distance_in_meters = 1 #1 meter
+    clipping_distance = clipping_distance_in_meters / depth_scale
+
+    align_to = rs.stream.color
+    align = rs.align(align_to)
      
 
     source, weights, view_img, save_txt, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
@@ -106,8 +116,9 @@ def detect(save_img=False):
     #for (path, img, im0s, vid_cap) in dataset_color:
     while True:
         frameset = pipe.wait_for_frames()
-        color_frame = frameset.get_color_frame()
-        depth_frame = frameset.get_depth_frame()
+        aligned_frames = align.process(frameset)
+        color_frame = aligned_frames.get_color_frame()
+        depth_frame = aligned_frames.get_depth_frame()
         depth_image = np.asanyarray(depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
 
@@ -162,6 +173,8 @@ def detect(save_img=False):
         for i, det in enumerate(pred):  # detections per image
             #if webcam:  # batch_size >= 1
             s, im0 = '%g: ' % i, im0s[i].copy()
+            im1 = im1s[i].copy()
+            im1 = cv2.convertScaleAbs(im1, alpha=0.03)
             #else:
              #   p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
 
@@ -189,7 +202,6 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
-                        print("////////////////////////////////////")
                         try:
                             new_image = im1[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
                             #cv2.imshow(str(p),new_image)
@@ -197,8 +209,7 @@ def detect(save_img=False):
                             pass
                         
                         #print("xyxy"+str(int(xyxy[0])))
-                        print("////////////////////////////////////")
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        plot_one_box(xyxy, im1, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -207,7 +218,7 @@ def detect(save_img=False):
             if view_img:
                 pass
                 window_name = 'image'
-                cv2.imshow(window_name, im0)
+                cv2.imshow(window_name, im1)
 
                 if (cv2.waitKey(30) >= 0): 
                     break
