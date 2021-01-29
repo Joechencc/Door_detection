@@ -207,7 +207,10 @@ def detect(save_img=False):
             if view_img:
                 pass
                 window_name = 'image'
-               # cv2.imshow(window_name, im0)
+                cv2.imshow(window_name, im0)
+
+                if (cv2.waitKey(30) >= 0): 
+                    break
 
             # Save results (image with detections)
             if save_img:
