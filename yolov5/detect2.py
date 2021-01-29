@@ -7,6 +7,7 @@ import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
 import numpy as np
+import math
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
@@ -48,6 +49,38 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh) 
 
+def door_frame(img, xyxy):
+    h_min,h_max = int(xyxy[1]),int(xyxy[3])
+    w_min,w_max = int(xyxy[0]),int(xyxy[2])
+    door_img = img[h_min:h_max,w_min:w_max]
+    height, width = h_max - h_min, w_max - w_min
+
+    sample_number_height, height_param, height_start = 10, 0.6, 10
+    height_step = math.floor(height_param* height / sample_number_height)
+    height_end = height_start+height_step* sample_number_height -1
+
+
+    sample_number_width, width_param, width_start = 10, 0.8, 10
+    width_step = math.floor(width_param* width / sample_number_width)
+    width_end = width_start+width_step* sample_number_width -1
+
+    #A_matrix
+    height_array = np.array([x for x in range(height_start, height_end, height_step)])
+    width_array = np.array([x for x in range(width_start, width_end, width_step)])
+   
+    assert len(height_array) == len(width_array)
+    depth_array = door_img[height_start:height_end:height_step, width_start:width_end:width_step]
+
+    A_matrix =  np.vstack((height_array, width_array))
+    A_matrix = A_matrix.T
+    print("A_matrix::::::"+str(depth_array.shape))
+    #A_matrix =  np.concatenate(height_array, width_array, depth_array.transpose())
+ 
+    #print("sampled_img"+str(door_img[height_start:height_end:height_step, width_start:width_end:width_step]))
+
+    
+    #cv2.imshow("door_img",door_img)
+
 
 def detect(save_img=False):
     pipe = rs.pipeline()
@@ -58,7 +91,6 @@ def detect(save_img=False):
 
     depth_sensor = profile.get_device().first_depth_sensor()
     depth_scale = depth_sensor.get_depth_scale()
-    print("Depth Scale is:::::::::::::::::::::::::::::; " , depth_scale)
 
     clipping_distance_in_meters = 1 #1 meter
     clipping_distance = clipping_distance_in_meters / depth_scale
@@ -202,11 +234,8 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
-                        try:
-                            new_image = im1[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
-                            #cv2.imshow(str(p),new_image)
-                        except:
-                            pass
+                        if (names[int(cls)] == "door"):
+                            door_frame(im1, xyxy)
                         
                         #print("xyxy"+str(int(xyxy[0])))
                         plot_one_box(xyxy, im1, label=label, color=colors[int(cls)], line_thickness=3)
@@ -218,7 +247,7 @@ def detect(save_img=False):
             if view_img:
                 pass
                 window_name = 'image'
-                cv2.imshow(window_name, im1)
+                #cv2.imshow(window_name, im1)
 
                 if (cv2.waitKey(30) >= 0): 
                     break
