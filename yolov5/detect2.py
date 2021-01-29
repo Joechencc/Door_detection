@@ -52,8 +52,8 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
 def detect(save_img=False):
     pipe = rs.pipeline()
     config = rs.config()
-    config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
-    config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
     profile = pipe.start(config)
      
 
@@ -110,7 +110,6 @@ def detect(save_img=False):
         depth_frame = frameset.get_depth_frame()
         depth_image = np.asanyarray(depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
-        #print("color_image::::"+str(color_image))
 
         im0s = np.expand_dims(color_image, axis=0)
         im1s = np.expand_dims(depth_image, axis=0)
@@ -121,7 +120,14 @@ def detect(save_img=False):
         im0 = [letterbox(x, new_shape=imgsz, auto=rect)[0] for x in im0s]
         im0 = np.stack(im0, 0)
         im0 = im0[:, :, :, ::-1].transpose(0, 3, 1, 2)  # BGR to RGB, to bsx3x416x416
+        #print("im0:::::::"+str(np.ascontiguousarray(im0).shape))
         im0 = np.ascontiguousarray(im0)
+        #print("im0:::::::"+str(np.ascontiguousarray(im0)))
+
+        #im1 = [letterbox(x, new_shape=imgsz, auto=rect)[0] for x in im1s]
+        #im1 = np.stack(im1, 0)
+        #im1 = im1[:, :, :, ::-1].transpose(0, 3, 1, 2)  # BGR to RGB, to bsx3x416x416
+        #im1 = np.ascontiguousarray(im1)
 
         # image intrinsic and extrin
         depth_intrin = depth_frame.profile.as_video_stream_profile().intrinsics
@@ -130,10 +136,15 @@ def detect(save_img=False):
         #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
         #_,_,im1s,_ = dataset_depth
         img = torch.from_numpy(im0).to(device)
+        # print("img:::::::"+str(img))
         img = img.half() if half else img.float()  # uint8 to fp16/32
+        #print("img:::::::"+str(img))
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         if img.ndimension() == 3:
             img = img.unsqueeze(0)
+        
+        #window_name = 'image'
+        #cv2.imshow(window_name, img)
 
         # Inference
         t1 = time_synchronized()
@@ -196,7 +207,7 @@ def detect(save_img=False):
             if view_img:
                 pass
                 window_name = 'image'
-                cv2.imshow(window_name, im0)
+               # cv2.imshow(window_name, im0)
 
             # Save results (image with detections)
             if save_img:
