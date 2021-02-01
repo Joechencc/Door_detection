@@ -55,7 +55,7 @@ def door_plane(img, xyxy):
     door_img = img[h_min:h_max,w_min:w_max]
     height, width = h_max - h_min, w_max - w_min
 
-    sample_number_height, height_param, height_start = 10, 0.6, 10
+    sample_number_height, height_param, height_start = 10, 0.6, 20
     height_step = math.floor(height_param* height / sample_number_height)
     height_end = height_start+height_step* sample_number_height -1
 
@@ -67,9 +67,13 @@ def door_plane(img, xyxy):
     #A_matrix
     height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
     width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+    #print("depth_array::::::::::::::::"+str(door_img[height_start:height_end:height_step, width_start:width_end:width_step].shape))
     depth_array = door_img[height_start:height_end:height_step, width_start:width_end:width_step].flatten()
     ones_array = np.ones_like(depth_array)
 
+    #print("len(height_array):::::::::::"+str(len(height_array)))
+    #print("len(width_array):::::::::::"+str(len(width_array)))
+    #print("len(depth_array):::::::::::"+str(len(depth_array)))
     assert len(height_array) == len(width_array) == len(depth_array)
 
     A_matrix = np.vstack((height_array, width_array,depth_array, ones_array))
@@ -86,13 +90,14 @@ def frame_plane(img, xyxy):
     w_min,w_max = int(xyxy[0]),int(xyxy[2])
     door_img = img[h_min:h_max,w_min:w_max]
     height, width = h_max - h_min, w_max - w_min
+    print("height:::::::::::::::"+str(height))
 
-    sample_number_height, height_param, height_start = 10, 0.6, 10
+    sample_number_height, height_param, height_start = 10, 1, 0
     height_step = math.floor(height_param* height / sample_number_height)
     height_end = height_start+height_step* sample_number_height -1
 
 
-    sample_number_width, width_param, width_start = 10, 0.8, 10
+    sample_number_width, width_param, width_start = 10, 1, 0
     width_step = math.floor(width_param* width / sample_number_width)
     width_end = width_start+width_step* sample_number_width -1
 
@@ -101,6 +106,7 @@ def frame_plane(img, xyxy):
     width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
     depth_lu = door_img[height_start, width_start]
     depth_ru = door_img[height_start, width_end]
+    print("door_img:::::::::"+str(door_img.shape))
     depth_ld = door_img[height_end, width_start]
     depth_rd = door_img[height_end, width_end]
 
@@ -290,17 +296,27 @@ def detect(save_img=False):
                             door_pl = door_plane(im1, xyxy)
                             h_min,h_max = xyxy[1], xyxy[3]
                             w_min,w_max = xyxy[0], xyxy[2]
-                            h_min -= 40
+                            h_min -= 50
+                            if h_min < 0: # do not go beyond the image
+                                h_min = 10
                             #h_max += 40
-                            w_min -= 20
-                            w_max +=50
+                            w_min -= 20  # do not go beyond the image
+                            if w_min < 0:
+                                w_min = 10
+                            w_max += 50
+                     #       if w_max > im:
+                     #           w_max = 10
+
+                            print("im1[0].size:::::::::::::::::::"+str(im1.shape))
                             xyxy[1], xyxy[3] = h_min,h_max
                             xyxy[0], xyxy[2] = w_min,w_max
                             frame_pl = frame_plane(im1, xyxy)
                             dot_product = np.dot(door_pl,frame_pl)
                             angle = math.acos(dot_product)
                             
-                            print("angle difference:::::::::::::::"+str(angle))
+                            print("angle difference:::::::::::::::"+str(angle
+
+))
                         
                         #print("xyxy"+str(int(xyxy[0])))
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
