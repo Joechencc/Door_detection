@@ -49,7 +49,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh) 
 
-def door_frame(img, xyxy):
+def door_plane(img, xyxy):
     h_min,h_max = int(xyxy[1]),int(xyxy[3])
     w_min,w_max = int(xyxy[0]),int(xyxy[2])
     door_img = img[h_min:h_max,w_min:w_max]
@@ -65,22 +65,74 @@ def door_frame(img, xyxy):
     width_end = width_start+width_step* sample_number_width -1
 
     #A_matrix
-    height_array = np.array([x for x in range(height_start, height_end, height_step)])
-    width_array = np.array([x for x in range(width_start, width_end, width_step)])
-   
-    assert len(height_array) == len(width_array)
-    depth_array = door_img[height_start:height_end:height_step, width_start:width_end:width_step]
+    height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
+    width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+    depth_array = door_img[height_start:height_end:height_step, width_start:width_end:width_step].flatten()
+    ones_array = np.ones_like(depth_array)
 
-    A_matrix =  np.vstack((height_array, width_array))
+    assert len(height_array) == len(width_array) == len(depth_array)
+
+    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array))
     A_matrix = A_matrix.T
-    print("A_matrix::::::"+str(depth_array.shape))
-    #A_matrix =  np.concatenate(height_array, width_array, depth_array.transpose())
- 
-    #print("sampled_img"+str(door_img[height_start:height_end:height_step, width_start:width_end:width_step]))
+    _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
+    min_idx = np.argmin(s)
+    min_vh = vh[:,min_idx]
+    n_vector = min_vh[:3]
+    vh_norm =  n_vector / np.linalg.norm(n_vector)
+    return vh_norm
 
+def frame_plane(img, xyxy):
+    h_min,h_max = int(xyxy[1]),int(xyxy[3])
+    w_min,w_max = int(xyxy[0]),int(xyxy[2])
+    door_img = img[h_min:h_max,w_min:w_max]
+    height, width = h_max - h_min, w_max - w_min
+
+    sample_number_height, height_param, height_start = 10, 0.6, 10
+    height_step = math.floor(height_param* height / sample_number_height)
+    height_end = height_start+height_step* sample_number_height -1
+
+
+    sample_number_width, width_param, width_start = 10, 0.8, 10
+    width_step = math.floor(width_param* width / sample_number_width)
+    width_end = width_start+width_step* sample_number_width -1
+
+    #A_matrix
+    height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
+    width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+    depth_lu = door_img[height_start, width_start]
+    depth_ru = door_img[height_start, width_end]
+    depth_ld = door_img[height_end, width_start]
+    depth_rd = door_img[height_end, width_end]
+
+    depth_array_estimate = np.zeros((sample_number_height, sample_number_width), dtype = door_img.dtype)
+    depth_array_estimate[0,:] = door_img[height_start,width_start:width_end:width_step]
+    depth_array_estimate[:,0] = door_img[height_start:height_end:height_step,width_start]
+    depth_array_estimate[:,-1] = door_img[height_start:height_end:height_step,width_end]
+    row_indx = 0;
+    for x in range(height_start+height_step, height_end, height_step):
+        row_indx +=1
+        col_indx = 0
+        for y in range(width_start+width_step, width_end-width_step, width_step):
+            col_indx+=1
+            depth_array_estimate[row_indx,col_indx] = door_img[x,y]
+
+    depth_array = depth_array_estimate.flatten()
+
+    ones_array = np.ones_like(width_array)
+
+    assert len(height_array) == len(width_array) == len(depth_array)
+
+    #print("depth_array::::::::::::"+str(depth_array))
+
+    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array))
+    A_matrix = A_matrix.T
+    _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
+    min_idx = np.argmin(s)
+    min_vh = vh[:,min_idx]
+    n_vector = min_vh[:3]
+    vh_norm =  n_vector / np.linalg.norm(n_vector)
+    return vh_norm
     
-    #cv2.imshow("door_img",door_img)
-
 
 def detect(save_img=False):
     pipe = rs.pipeline()
@@ -235,10 +287,23 @@ def detect(save_img=False):
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
                         if (names[int(cls)] == "door"):
-                            door_frame(im1, xyxy)
+                            door_pl = door_plane(im1, xyxy)
+                            h_min,h_max = xyxy[1], xyxy[3]
+                            w_min,w_max = xyxy[0], xyxy[2]
+                            h_min -= 40
+                            #h_max += 40
+                            w_min -= 20
+                            w_max +=50
+                            xyxy[1], xyxy[3] = h_min,h_max
+                            xyxy[0], xyxy[2] = w_min,w_max
+                            frame_pl = frame_plane(im1, xyxy)
+                            dot_product = np.dot(door_pl,frame_pl)
+                            angle = math.acos(dot_product)
+                            
+                            print("angle difference:::::::::::::::"+str(angle))
                         
                         #print("xyxy"+str(int(xyxy[0])))
-                        plot_one_box(xyxy, im1, label=label, color=colors[int(cls)], line_thickness=3)
+                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -247,7 +312,7 @@ def detect(save_img=False):
             if view_img:
                 pass
                 window_name = 'image'
-                #cv2.imshow(window_name, im1)
+                cv2.imshow(window_name, im0)
 
                 if (cv2.waitKey(30) >= 0): 
                     break
