@@ -88,10 +88,10 @@ def door_plane(img, xyxy):
 def frame_plane(img, xyxy):
     h_min,h_max = int(xyxy[1]),int(xyxy[3])
     w_min,w_max = int(xyxy[0]),int(xyxy[2])
-    door_img = img[h_min:h_max,w_min:w_max]
-    height, width = h_max - h_min, w_max - w_min
-    print("height:::::::::::::::"+str(height))
-
+    door_img = img[h_min:h_max, w_min:w_max:1]
+    height, width = door_img.shape[0], door_img.shape[1]
+    print("height::::::::::::"+str(height))
+    print("width::::::::::::"+str(width))
     sample_number_height, height_param, height_start = 10, 1, 0
     height_step = math.floor(height_param* height / sample_number_height)
     height_end = height_start+height_step* sample_number_height -1
@@ -104,9 +104,14 @@ def frame_plane(img, xyxy):
     #A_matrix
     height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
     width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+
+    print("height_start:::::"+str(height_start))
+    print("height_end:::::"+str(height_end))
+    print("width_start:::::"+str(width_start))
+    print("width_end:::::"+str(width_end))
     depth_lu = door_img[height_start, width_start]
     depth_ru = door_img[height_start, width_end]
-    print("door_img:::::::::"+str(door_img.shape))
+    #print("door_img:::::::::"+str(door_img.shape))
     depth_ld = door_img[height_end, width_start]
     depth_rd = door_img[height_end, width_end]
 
@@ -296,14 +301,14 @@ def detect(save_img=False):
                             door_pl = door_plane(im1, xyxy)
                             h_min,h_max = xyxy[1], xyxy[3]
                             w_min,w_max = xyxy[0], xyxy[2]
-                            h_min -= 50
+                            h_min -= 20
                             if h_min < 0: # do not go beyond the image
                                 h_min = 10
                             #h_max += 40
                             w_min -= 20  # do not go beyond the image
                             if w_min < 0:
                                 w_min = 10
-                            w_max += 50
+                            w_max += 20
                      #       if w_max > im:
                      #           w_max = 10
 
