@@ -67,31 +67,29 @@ def door_plane(img, xyxy):
     #A_matrix
     height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
     width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
-    #print("depth_array::::::::::::::::"+str(door_img[height_start:height_end:height_step, width_start:width_end:width_step].shape))
     depth_array = door_img[height_start:height_end:height_step, width_start:width_end:width_step].flatten()
     ones_array = np.ones_like(depth_array)
 
-    #print("len(height_array):::::::::::"+str(len(height_array)))
-    #print("len(width_array):::::::::::"+str(len(width_array)))
-    #print("len(depth_array):::::::::::"+str(len(depth_array)))
-    assert len(height_array) == len(width_array) == len(depth_array)
+    if len(height_array) == len(width_array) == len(depth_array):
+        integrity_flag = True
+    else:
+        integrity_flag = False
+        return None, False
 
-    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array))
-    A_matrix = A_matrix.T
+    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
     _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
     min_idx = np.argmin(s)
     min_vh = vh[:,min_idx]
     n_vector = min_vh[:3]
     vh_norm =  n_vector / np.linalg.norm(n_vector)
-    return vh_norm
+    return vh_norm, integrity_flag
 
 def frame_plane(img, xyxy):
     h_min,h_max = int(xyxy[1]),int(xyxy[3])
     w_min,w_max = int(xyxy[0]),int(xyxy[2])
     door_img = img[h_min:h_max, w_min:w_max:1]
     height, width = door_img.shape[0], door_img.shape[1]
-    print("height::::::::::::"+str(height))
-    print("width::::::::::::"+str(width))
+
     sample_number_height, height_param, height_start = 10, 1, 0
     height_step = math.floor(height_param* height / sample_number_height)
     height_end = height_start+height_step* sample_number_height -1
@@ -101,17 +99,13 @@ def frame_plane(img, xyxy):
     width_step = math.floor(width_param* width / sample_number_width)
     width_end = width_start+width_step* sample_number_width -1
 
-    #A_matrix
+    # A_matrix
     height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
     width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
 
-    print("height_start:::::"+str(height_start))
-    print("height_end:::::"+str(height_end))
-    print("width_start:::::"+str(width_start))
-    print("width_end:::::"+str(width_end))
+    # Depth Estimate
     depth_lu = door_img[height_start, width_start]
     depth_ru = door_img[height_start, width_end]
-    #print("door_img:::::::::"+str(door_img.shape))
     depth_ld = door_img[height_end, width_start]
     depth_rd = door_img[height_end, width_end]
 
@@ -128,15 +122,11 @@ def frame_plane(img, xyxy):
             depth_array_estimate[row_indx,col_indx] = door_img[x,y]
 
     depth_array = depth_array_estimate.flatten()
-
     ones_array = np.ones_like(width_array)
-
     assert len(height_array) == len(width_array) == len(depth_array)
 
-    #print("depth_array::::::::::::"+str(depth_array))
-
-    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array))
-    A_matrix = A_matrix.T
+    # Stack A matrix
+    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
     _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
     min_idx = np.argmin(s)
     min_vh = vh[:,min_idx]
@@ -298,19 +288,35 @@ def detect(save_img=False):
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
                         if (names[int(cls)] == "door"):
-                            door_pl = door_plane(im1, xyxy)
-                            h_min,h_max = xyxy[1], xyxy[3]
-                            w_min,w_max = xyxy[0], xyxy[2]
-                            h_min -= 20
-                            if h_min < 0: # do not go beyond the image
-                                h_min = 10
-                            #h_max += 40
-                            w_min -= 20  # do not go beyond the image
-                            if w_min < 0:
-                                w_min = 10
-                            w_max += 20
-                     #       if w_max > im:
-                     #           w_max = 10
+                            door_pl, data_integrity = door_plane(im1, xyxy)
+                            if data_integrity == False:
+                                continue
+                            hinge_position = "left"
+                            if hinge_position == "left":
+                                h_min,h_max = xyxy[1], xyxy[3]
+                                w_min,w_max = xyxy[0], xyxy[2]
+                                h_min -= 20
+                                if h_min < 0: # do not go beyond the image
+                                    h_min = 10
+                                #h_max += 40
+                                w_min -= 20  # do not go beyond the image
+                                if w_min < 0:
+                                    w_min = 10
+                                w_max += 50
+                     #           if w_max > im:
+                     #               w_max = 10
+
+                            else:
+                                h_min,h_max = xyxy[1], xyxy[3]
+                                w_min,w_max = xyxy[0], xyxy[2]
+                                h_min -= 20
+                                if h_min < 0: # do not go beyond the image
+                                    h_min = 10
+                                #h_max += 40
+                                w_min -= 70  # do not go beyond the image
+                                if w_min < 0:
+                                    w_min = 10
+                                w_max += 20
 
                             print("im1[0].size:::::::::::::::::::"+str(im1.shape))
                             xyxy[1], xyxy[3] = h_min,h_max
@@ -318,10 +324,13 @@ def detect(save_img=False):
                             frame_pl = frame_plane(im1, xyxy)
                             dot_product = np.dot(door_pl,frame_pl)
                             angle = math.acos(dot_product)
+                            global door_belief
+                            if door_belief ==0:
+                                door_belief = angle
+                            else:
+                                door_belief = 0.9 * door_belief+ 0.1* angle
                             
-                            print("angle difference:::::::::::::::"+str(angle
-
-))
+                            print("angle difference:::::::::::::::"+str(door_belief))
                         
                         #print("xyxy"+str(int(xyxy[0])))
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
@@ -383,6 +392,7 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     print(opt)
     check_requirements()
+    door_belief = 0
 
     with torch.no_grad():
         if opt.update:  # update all models (to fix SourceChangeWarning)
