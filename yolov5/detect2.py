@@ -74,7 +74,7 @@ def door_plane(img, xyxy):
         integrity_flag = True
     else:
         integrity_flag = False
-        return None, False
+        return None, None, None, False
 
     A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
     _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
@@ -82,12 +82,12 @@ def door_plane(img, xyxy):
     min_vh = vh[:,min_idx]
     n_vector = min_vh[:3]
     vh_norm =  n_vector / np.linalg.norm(n_vector)
-    return vh_norm, integrity_flag
+    return door_img[int((height_start+height_end)/2), width_start+2], door_img[int((height_start+height_end)/2), width_end-2], vh_norm, integrity_flag
 
 def frame_plane(img, xyxy):
     h_min,h_max = int(xyxy[1]),int(xyxy[3])
     w_min,w_max = int(xyxy[0]),int(xyxy[2])
-    door_img = img[h_min:h_max, w_min:w_max:1]
+    door_img = img[h_min:h_max, w_min:w_max]
     height, width = door_img.shape[0], door_img.shape[1]
 
     sample_number_height, height_param, height_start = 10, 1, 0
@@ -132,8 +132,7 @@ def frame_plane(img, xyxy):
     min_vh = vh[:,min_idx]
     n_vector = min_vh[:3]
     vh_norm =  n_vector / np.linalg.norm(n_vector)
-    return vh_norm
-    
+    return door_img[int((height_start+height_end)/2), width_start], door_img[int((height_start+height_end)/2), width_end], vh_norm
 
 def detect(save_img=False):
     pipe = rs.pipeline()
@@ -288,10 +287,12 @@ def detect(save_img=False):
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
                         if (names[int(cls)] == "door"):
-                            door_pl, data_integrity = door_plane(im1, xyxy)
+                            pl_left_depth, pl_right_depth, door_pl, data_integrity = door_plane(im1, xyxy)
                             if data_integrity == False:
                                 continue
-                            hinge_position = "left"
+                            global hinge_position
+                            #print("pl_left_depth::::::::::::::"+str(pl_left_depth))
+                            #print("pl_right_depth::::::::::::::"+str(pl_right_depth))
                             if hinge_position == "left":
                                 h_min,h_max = xyxy[1], xyxy[3]
                                 w_min,w_max = xyxy[0], xyxy[2]
@@ -303,8 +304,25 @@ def detect(save_img=False):
                                 if w_min < 0:
                                     w_min = 10
                                 w_max += 50
+                                xyxy[1], xyxy[3] = h_min,h_max
+                                xyxy[0], xyxy[2] = w_min,w_max
+                                fr_left_depth, fr_right_depth, frame_pl = frame_plane(im1, xyxy)
                      #           if w_max > im:
                      #               w_max = 10
+                            elif hinge_position == "right":
+                                h_min,h_max = xyxy[1], xyxy[3]
+                                w_min,w_max = xyxy[0], xyxy[2]
+                                h_min -= 20
+                                if h_min < 0: # do not go beyond the image
+                                    h_min = 10
+                                #h_max += 40
+                                w_min -= 50  # do not go beyond the image
+                                if w_min < 0:
+                                    w_min = 10
+                                w_max += 20
+                                xyxy[1], xyxy[3] = h_min,h_max
+                                xyxy[0], xyxy[2] = w_min,w_max
+                                fr_left_depth, fr_right_depth, frame_pl = frame_plane(im1, xyxy)
 
                             else:
                                 h_min,h_max = xyxy[1], xyxy[3]
@@ -316,14 +334,41 @@ def detect(save_img=False):
                                 w_min -= 70  # do not go beyond the image
                                 if w_min < 0:
                                     w_min = 10
-                                w_max += 20
+                                w_max += 70
+                                xyxy[1], xyxy[3] = h_min,h_max
+                                xyxy[0], xyxy[2] = w_min,w_max
+                                fr_left_depth, fr_right_depth, frame_pl = frame_plane(im1, xyxy)
+                               
+                                
+                                if (abs(int(fr_left_depth) - int(pl_left_depth)) > abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_left_depth)<int(pl_left_depth)) :
+                                    push_pull_state = "left_push"
+                                elif (abs(int(fr_left_depth) - int(pl_left_depth)) > abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_left_depth)>int(pl_left_depth)) :
+                                    push_pull_state = "left_pull"
+                                elif (abs(int(fr_left_depth) - int(pl_left_depth)) < abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_right_depth)<int(pl_right_depth)) :
+                                    push_pull_state = "right_push"
+                                elif (abs(int(fr_left_depth) - int(pl_left_depth)) < abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_right_depth)>int(pl_right_depth)) :
+                                    push_pull_state = "right_pull"
+                                else:
+                                    push_pull_state = "closed"
+ 
+                                if push_pull_state == "left_push" or push_pull_state == "right_push":
+                                    push_sign = 1
+                                elif push_pull_state == "left_pull" or push_pull_state == "right_pull":
+                                    push_sign = -1
+                                else:
+                                    push_sign = 0
 
-                            print("im1[0].size:::::::::::::::::::"+str(im1.shape))
-                            xyxy[1], xyxy[3] = h_min,h_max
-                            xyxy[0], xyxy[2] = w_min,w_max
-                            frame_pl = frame_plane(im1, xyxy)
+                                if push_pull_state == "left_push" or push_pull_state == "left_pull":
+                                    hinge_position  = "right"
+                                if push_pull_state == "right_push" or push_pull_state == "right_pull":
+                                    hinge_position = "left"
+                                else:
+                                    pass
+
+                            print("push_pull_state:::::::::::::::::"+str(push_pull_state))
+
                             dot_product = np.dot(door_pl,frame_pl)
-                            angle = math.acos(dot_product)
+                            angle = push_sign * math.acos(dot_product)
                             global door_belief
                             if door_belief ==0:
                                 door_belief = angle
@@ -393,6 +438,7 @@ if __name__ == '__main__':
     print(opt)
     check_requirements()
     door_belief = 0
+    hinge_position = "unknown"
 
     with torch.no_grad():
         if opt.update:  # update all models (to fix SourceChangeWarning)
