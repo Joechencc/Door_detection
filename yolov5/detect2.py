@@ -331,16 +331,22 @@ def detect(save_img=False):
                                 if h_min < 0: # do not go beyond the image
                                     h_min = 10
                                 #h_max += 40
-                                w_min -= 70  # do not go beyond the image
+                                w_min -= 30  # do not go beyond the image
                                 if w_min < 0:
                                     w_min = 10
-                                w_max += 70
+                                w_max += 30
                                 xyxy[1], xyxy[3] = h_min,h_max
                                 xyxy[0], xyxy[2] = w_min,w_max
                                 fr_left_depth, fr_right_depth, frame_pl = frame_plane(im1, xyxy)
-                               
-                                
-                                if (abs(int(fr_left_depth) - int(pl_left_depth)) > abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_left_depth)<int(pl_left_depth)) :
+
+                                print("fr_left_depth::::::::::::"+str(fr_left_depth))
+                                print("pl_left_depth::::::::::::"+str(pl_left_depth))
+                                print("fr_right_depth::::::::::::"+str(fr_right_depth))
+                                print("pl_right_depth::::::::::::"+str(pl_right_depth))
+                                 
+                                if (abs(int(fr_left_depth) - int(pl_left_depth)) < 4) and (abs(int(fr_right_depth) - int(pl_right_depth)) < 4) :
+                                    push_pull_state = "closed"
+                                elif (abs(int(fr_left_depth) - int(pl_left_depth)) > abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_left_depth)<int(pl_left_depth)) :
                                     push_pull_state = "left_push"
                                 elif (abs(int(fr_left_depth) - int(pl_left_depth)) > abs(int(fr_right_depth) - int(pl_right_depth))) and (int(fr_left_depth)>int(pl_left_depth)) :
                                     push_pull_state = "left_pull"
@@ -360,11 +366,12 @@ def detect(save_img=False):
 
                                 if push_pull_state == "left_push" or push_pull_state == "left_pull":
                                     hinge_position  = "right"
-                                if push_pull_state == "right_push" or push_pull_state == "right_pull":
+                                elif push_pull_state == "right_push" or push_pull_state == "right_pull":
                                     hinge_position = "left"
                                 else:
-                                    pass
-
+                                    hinge_position = "unknown"
+ 
+                            print("hinge_position:::::::::::::::::"+str(hinge_position))
                             print("push_pull_state:::::::::::::::::"+str(push_pull_state))
 
                             dot_product = np.dot(door_pl,frame_pl)
