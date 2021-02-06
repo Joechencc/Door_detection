@@ -73,6 +73,7 @@ def detect(image, depth):
     # Load model
     model = attempt_load(weights, map_location=device)  # load FP32 model
     imgsz = check_img_size(imgsz, s=model.stride.max())  # check img_size
+    
     if half:
         model.half()  # to FP16
 
@@ -86,28 +87,7 @@ def detect(image, depth):
     vid_path, vid_writer = None, None
     
     view_img = True
-    cudnn.benchmark = True  # set True to speed up constant image size inference
-    print("source"+str(source))
-    #dataset_color = LoadStreams(source, img_size=imgsz)
-    #dataset_depth = LoadStreams(str(2), img_size=imgsz)
     
-    np_arr = np.fromstring(image.data, np.uint8)
-    image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    im0s = np.expand_dims(image_np, axis=0)
-    img0 = im0s.copy()
-    
-    # Letterbox
-    s = np.stack([letterbox(x, new_shape=imgsz)[0].shape for x in im0s], 0)  # inference shapes
-    rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equals
-    img = [letterbox(x, new_shape=imgsz, auto=rect)[0] for x in img0]
-    print("img1::::::::::::::::::::::::::::"+str(np.array(img).shape))
-    img = np.stack(img, 0)
-    print("img2::::::::::::::::::::::::::::"+str(img.shape))
-    img = img[:, :, :, ::-1].transpose(0, 3, 1, 2)  # BGR to RGB, to bsx3x416x416
-    img = np.ascontiguousarray(img)
-    path = ['4']
-        
-    # Get names and colors
     names = model.module.names if hasattr(model, 'module') else model.names
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
 
@@ -115,13 +95,33 @@ def detect(image, depth):
     t0 = time.time()
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
+    cudnn.benchmark = True  # set True to speed up constant image size inference
+    print("source"+str(source))
+    #dataset_color = LoadStreams(source, img_size=imgsz)
+    #dataset_depth = LoadStreams(str(2), img_size=imgsz)
+    
+    np_arr = np.frombuffer(image.data, np.uint8)
+    image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    im0s = np.expand_dims(image_np, axis=0)
+    img0 = im0s.copy()
+    
+    # Letterbox
+    s = np.stack([letterbox(x, new_shape=imgsz)[0].shape for x in im0s], 0)  # inference shapes
+    rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equal
+    im0 = [letterbox(x, new_shape=imgsz, auto=rect)[0] for x in im0s]
+    im0 = np.stack(im0, 0)
+    im0 = im0[:, :, :, ::-1].transpose(0, 3, 1, 2)  # BGR to RGB, to bsx3x416x416
+        #print("im0:::::::"+str(np.ascontiguousarray(im0).shape))
+    im0 = np.ascontiguousarray(im0)
+    path = ['4']
+        
     
     #for path, img, im0s, vid_cap in dataset_color:
         #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
         #_,_,im1s,_ = dataset_depth
         #print("img::::::"+str(img.shape))
         #print("im0s::::::"+str(im0s.shape))
-    img = torch.from_numpy(np.asarray(img)).to(device)
+    img = torch.from_numpy(im0).to(device)
     img = img.half() if half else img.float()  # uint8 to fp16/32
     img /= 255.0  # 0 - 255 to 0.0 - 1.0
     if img.ndimension() == 3:
@@ -141,10 +141,10 @@ def detect(image, depth):
 
         # Process detections
     for i, det in enumerate(pred):  # detections per image
-        if webcam:  # batch_size >= 1
-            p, s, im0 = path[i], '%g: ' % i, im0s[i].copy()
-        else:
-            p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
+        p, s, im0 = path[i], '%g: ' % i, im0s[i].copy()
+        cv2.imshow(str(p), im0) 
+        if (cv2.waitKey(30) >= 0): 
+            break
 
         p = Path(p)  # to Path
         save_path = str(save_dir / p.name)  # img.jpg
@@ -175,8 +175,8 @@ def detect(image, depth):
                         #cv2.imshow(str(p),new_image)
                     except:
                         pass
-                        
-                        #print("xyxy"+str(int(xyxy[0])))
+                    
+                    #cv2.imshow(str(p), im0) 
                     plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
         # Print time (inference + NMS)
@@ -185,7 +185,7 @@ def detect(image, depth):
         # Stream results
         if view_img:
             pass
-            cv2.imshow(str(p), im0)
+            #cv2.imshow(str(p), im0)
 
 
     if save_txt:
