@@ -9,7 +9,8 @@ import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
 import rospy
-from message_filters import ApproximateTimeSynchronizer, Subscriber
+#from message_filters import ApproximateTimeSynchronizer, Subscriber
+import message_filters
 from sensor_msgs.msg import CompressedImage, Image
 
 from models.experimental import attempt_load
@@ -20,6 +21,7 @@ from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 import numpy as np
 from cv_bridge import CvBridge
+import math
 
 def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
     # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
@@ -52,6 +54,92 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh) 
+    
+def door_plane(img, xyxy):
+    h_min,h_max = int(xyxy[1]),int(xyxy[3])
+    w_min,w_max = int(xyxy[0]),int(xyxy[2])
+    door_img = img[h_min:h_max,w_min:w_max]
+    height, width = h_max - h_min, w_max - w_min
+
+    sample_number_height, height_param, height_start = 10, 0.6, 20
+    height_step = math.floor(height_param* height / sample_number_height)
+    height_end = height_start+height_step* sample_number_height -1
+
+
+    sample_number_width, width_param, width_start = 10, 0.8, 10
+    width_step = math.floor(width_param* width / sample_number_width)
+    width_end = width_start+width_step* sample_number_width -1
+
+    #A_matrix
+    height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
+    width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+    depth_array = door_img[height_start:height_end:height_step, width_start:width_end:width_step].flatten()
+    ones_array = np.ones_like(depth_array)
+
+    if len(height_array) == len(width_array) == len(depth_array):
+        integrity_flag = True
+    else:
+        integrity_flag = False
+        return None, None, None, False
+
+    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
+    _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
+    min_idx = np.argmin(s)
+    min_vh = vh[:,min_idx]
+    n_vector = min_vh[:3]
+    vh_norm =  n_vector / np.linalg.norm(n_vector)
+    return door_img[int((height_start+height_end)/2), width_start+2], door_img[int((height_start+height_end)/2), width_end-2], vh_norm, integrity_flag
+
+def frame_plane(img, xyxy):
+    h_min,h_max = int(xyxy[1]),int(xyxy[3])
+    w_min,w_max = int(xyxy[0]),int(xyxy[2])
+    door_img = img[h_min:h_max, w_min:w_max]
+    height, width = door_img.shape[0], door_img.shape[1]
+
+    sample_number_height, height_param, height_start = 10, 1, 0
+    height_step = math.floor(height_param* height / sample_number_height)
+    height_end = height_start+height_step* sample_number_height -1
+
+
+    sample_number_width, width_param, width_start = 10, 1, 0
+    width_step = math.floor(width_param* width / sample_number_width)
+    width_end = width_start+width_step* sample_number_width -1
+
+    # A_matrix
+    height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
+    width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+
+    # Depth Estimate
+    depth_lu = door_img[height_start, width_start]
+    depth_ru = door_img[height_start, width_end]
+    depth_ld = door_img[height_end, width_start]
+    depth_rd = door_img[height_end, width_end]
+
+    depth_array_estimate = np.zeros((sample_number_height, sample_number_width), dtype = door_img.dtype)
+    depth_array_estimate[0,:] = door_img[height_start,width_start:width_end:width_step]
+    depth_array_estimate[:,0] = door_img[height_start:height_end:height_step,width_start]
+    depth_array_estimate[:,-1] = door_img[height_start:height_end:height_step,width_end]
+    row_indx = 0;
+    for x in range(height_start+height_step, height_end, height_step):
+        row_indx +=1
+        col_indx = 0
+        for y in range(width_start+width_step, width_end-width_step, width_step):
+            col_indx+=1
+            depth_array_estimate[row_indx,col_indx] = door_img[x,y]
+
+    depth_array = depth_array_estimate.flatten()
+    ones_array = np.ones_like(width_array)
+    assert len(height_array) == len(width_array) == len(depth_array)
+
+    # Stack A matrix
+    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
+    _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
+    min_idx = np.argmin(s)
+    min_vh = vh[:,min_idx]
+    n_vector = min_vh[:3]
+    vh_norm =  n_vector / np.linalg.norm(n_vector)
+    return door_img[int((height_start+height_end)/2), width_start], door_img[int((height_start+height_end)/2), width_end], vh_norm
+
     
 def detect(image, depth):
 
@@ -87,6 +175,7 @@ def detect(image, depth):
     vid_path, vid_writer = None, None
     
     view_img = True
+    save_img = False	 	
     
     names = model.module.names if hasattr(model, 'module') else model.names
     colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
@@ -97,13 +186,20 @@ def detect(image, depth):
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
     cudnn.benchmark = True  # set True to speed up constant image size inference
     print("source"+str(source))
-    #dataset_color = LoadStreams(source, img_size=imgsz)
-    #dataset_depth = LoadStreams(str(2), img_size=imgsz)
     
-    np_arr = np.frombuffer(image.data, np.uint8)
-    image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    
+    color_arr = np.frombuffer(image.data, np.uint8)
+    image_np = cv2.imdecode(color_arr, cv2.IMREAD_COLOR)
     im0s = np.expand_dims(image_np, axis=0)
     img0 = im0s.copy()
+    
+    depth_arr = CvBridge().imgmsg_to_cv2(depth, desired_encoding='16UC1')
+    #depth_arr = np.frombuffer(depth.data, np.uint8)
+    #print("depth_arr::::::::::"+str(np.asarray(depth_arr)))
+    #depth_np = cv2.imdecode(depth_arr, cv2.IMREAD_GRAYSCALE)
+
+    im1s = np.expand_dims(depth_arr, axis=0)
+    img1 = im1s.copy()
     
     # Letterbox
     s = np.stack([letterbox(x, new_shape=imgsz)[0].shape for x in im0s], 0)  # inference shapes
@@ -135,60 +231,79 @@ def detect(image, depth):
     pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
     t2 = time_synchronized()
 
-        # Apply Classifier
+    # Apply Classifier
     if classify:
         pred = apply_classifier(pred, modelc, img, im0s)
 
         # Process detections
+    print("check1::::::::::::::::::::::::::::::::::::::::::::")
     for i, det in enumerate(pred):  # detections per image
-        p, s, im0 = path[i], '%g: ' % i, im0s[i].copy()
-        cv2.imshow(str(p), im0) 
-        if (cv2.waitKey(30) >= 0): 
-            break
+        #if webcam:  # batch_size >= 1
+        s, im0 = '%g: ' % i, im0s[i].copy()
+        im1 = im1s.copy()
+        #print("im1:::::::::::"+str(im1.shape))
+        #im1 = cv2.convertScaleAbs(im1, alpha=0.03)
+        #else:
+        #   p, s, im0, frame = path, '', im0s, getattr(dataset_color, 'frame', 0)
 
-        p = Path(p)  # to Path
-        save_path = str(save_dir / p.name)  # img.jpg
+        #p = Path(p)  # to Path
+        #save_path = str(save_dir / p.name)  # img.jpg
         #txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset_color.mode == 'image' else f'_{frame}')  # img.txt
         s += '%gx%g ' % img.shape[2:]  # print string
         gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
+        print("check2::::::::::::::::::::::::::::::::::::::::::::")
         if len(det):
             # Rescale boxes from img_size to im0 size
             det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
-                # Print results
+            # Print results
             for c in det[:, -1].unique():
                 n = (det[:, -1] == c).sum()  # detections per class
                 s += f'{n} {names[int(c)]}s, '  # add to string
 
-                # Write results
+            # Write results
             for *xyxy, conf, cls in reversed(det):
                 if save_txt:  # Write to file
                     xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                     line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
-                    #with open(txt_path + '.txt', 'a') as f:
-                       # f.write(('%g ' * len(line)).rstrip() % line + '\n')
+                    with open(txt_path + '.txt', 'a') as f:
+                        f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
-                if view_img:  # Add bbox to image
+                if save_img or view_img:  # Add bbox to image
                     label = f'{names[int(cls)]} {conf:.2f}'
-                    try:
-                        new_image = im0[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
-                        #cv2.imshow(str(p),new_image)
-                    except:
-                        pass
-                    
-                    #cv2.imshow(str(p), im0) 
+                        
+                        #print("xyxy"+str(int(xyxy[0])))
                     plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
-        # Print time (inference + NMS)
+       # Print time (inference + NMS)
         print(f'{s}Done. ({t2 - t1:.3f}s)')
 
-        # Stream results
+       # Stream results
         if view_img:
             pass
-            #cv2.imshow(str(p), im0)
+            window_name = 'image'
+            cv2.imshow(window_name, im0)
+            if (cv2.waitKey(30) >= 0): 
+                break
 
+            # Save results (image with detections)
+        if save_img:
+            if dataset_color.mode == 'image':
+                cv2.imwrite(save_path, im0)
+            else:  # 'video'
+                if vid_path != save_path:  # new video
+                    vid_path = save_path
+                    if isinstance(vid_writer, cv2.VideoWriter):
+                        vid_writer.release()  # release previous video writer
 
-    if save_txt:
+                    fourcc = 'mp4v'  # output video codec
+                    fps = vid_cap.get(cv2.CAP_PROP_FPS)
+                    w = int(vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    h = int(vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*fourcc), fps, (w, h))
+                vid_writer.write(im0)
+
+    if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
         print(f"Results saved to {save_dir}{s}")
 
@@ -215,6 +330,8 @@ if __name__ == '__main__':
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     opt = parser.parse_args()
     check_requirements()
+    door_belief = 0
+    hinge_position = "unknown"
     rospy.init_node('door_detection', anonymous=True)
 
     with torch.no_grad():
@@ -223,8 +340,8 @@ if __name__ == '__main__':
                 detect()
                 strip_optimizer(opt.weights)
         else:
-            depth_sub = Subscriber("/camera/depth/image_rect_raw", Image)
-            image_sub = Subscriber("/camera/color/image_raw/compressed", CompressedImage)
-            ats = ApproximateTimeSynchronizer([image_sub, depth_sub], queue_size=5, slop=0.1)
+            depth_sub = message_filters.Subscriber("/camera/depth/image_rect_raw", Image, queue_size = 1, buff_size=2**24)
+            image_sub = message_filters.Subscriber("/camera/color/image_raw/compressed", CompressedImage, queue_size = 1, buff_size=2**24)
+            ats = message_filters.ApproximateTimeSynchronizer([image_sub, depth_sub], 10,1 )
             ats.registerCallback(detect)
             rospy.spin()

@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import argparse
 import time
 from pathlib import Path
@@ -13,7 +14,6 @@ from utils.general import check_img_size, check_requirements, non_max_suppressio
     xyxy2xywh, strip_optimizer, set_logging, increment_path
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
-import pyrealsense2 as rs     
 
 
 def detect(save_img=False):
@@ -62,7 +62,6 @@ def detect(save_img=False):
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
     for path, img, im0s, vid_cap in dataset_color:
-        #print("dataset_depth:::::::::::::;;"+str((dataset_depth)))
         #_,_,im1s,_ = dataset_depth
         #print("img::::::"+str(img.shape))
         #print("im0s::::::"+str(im0s.shape))
@@ -80,6 +79,8 @@ def detect(save_img=False):
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
         t2 = time_synchronized()
 
+        print("img.shape:::::::::::::::::"+str(img.shape))
+        print("im0s.shape:::::::::::::::::"+str(im0s.shape))
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
@@ -115,7 +116,6 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
-                        print("////////////////////////////////////")
                         try:
                             new_image = im0[int(xyxy[1]):int(xyxy[3]),int(xyxy[0]):int(xyxy[2])]
                             #cv2.imshow(str(p),new_image)
@@ -123,7 +123,6 @@ def detect(save_img=False):
                             pass
                         
                         #print("xyxy"+str(int(xyxy[0])))
-                        print("////////////////////////////////////")
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
             # Print time (inference + NMS)
