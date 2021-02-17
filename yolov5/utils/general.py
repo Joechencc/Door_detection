@@ -51,7 +51,7 @@ def check_online():
     # Check internet connectivity
     import socket
     try:
-        socket.create_connection(("1.1.1.1", 53))  # check host accesability
+        socket.create_connection(("1.1.1.1", 443), 5)  # check host accesability
         return True
     except OSError:
         return False
@@ -65,12 +65,12 @@ def check_git_status():
         assert not Path('/workspace').exists(), 'skipping check (Docker image)'  # not Path('/.dockerenv').exists()
         assert check_online(), 'skipping check (offline)'
 
-        cmd = 'git fetch && git config --get remote.origin.url'  # github repo url
-        url = subprocess.check_output(cmd, shell=True).decode().rstrip()
-        branch = subprocess.check_output('git branch --show-current', shell=True).decode().rstrip()  # current
+        cmd = 'git fetch && git config --get remote.origin.url'
+        url = subprocess.check_output(cmd, shell=True).decode().strip().rstrip('.git')  # github repo url
+        branch = subprocess.check_output('git rev-parse --abbrev-ref HEAD', shell=True).decode().strip()  # checked out
         n = int(subprocess.check_output(f'git rev-list {branch}..origin/master --count', shell=True))  # commits behind
         if n > 0:
-            s = f"⚠️ WARNING: code is out of date by {n} {'commits' if n > 1 else 'commmit'}. " \
+            s = f"⚠️ WARNING: code is out of date by {n} commit{'s' * (n > 1)}. " \
                 f"Use 'git pull' to update or 'git clone {url}' to download latest."
         else:
             s = f'up to date with {url} ✅'
@@ -79,11 +79,11 @@ def check_git_status():
         print(e)
 
 
-def check_requirements(file='requirements.txt'):
+def check_requirements(file='requirements.txt', exclude=()):
     # Check installed dependencies meet requirements
     import pkg_resources
-    requirements = pkg_resources.parse_requirements(Path(file).open())
-    requirements = [x.name + ''.join(*x.specs) if len(x.specs) else x.name for x in requirements]
+    requirements = [f'{x.name}{x.specifier}' for x in pkg_resources.parse_requirements(Path(file).open())
+                    if x.name not in exclude]
     pkg_resources.require(requirements)  # DistributionNotFound or VersionConflict exception if requirements not met
 
 
@@ -225,7 +225,7 @@ def xywh2xyxy(x):
     return y
 
 
-def xywhn2xyxy(x, w=640, h=640, padw=32, padh=32):
+def xywhn2xyxy(x, w=640, h=640, padw=0, padh=0):
     # Convert nx4 boxes from [x, y, w, h] normalized to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
     y[:, 0] = w * (x[:, 0] - x[:, 2] / 2) + padw  # top left x
@@ -233,6 +233,40 @@ def xywhn2xyxy(x, w=640, h=640, padw=32, padh=32):
     y[:, 2] = w * (x[:, 0] + x[:, 2] / 2) + padw  # bottom right x
     y[:, 3] = h * (x[:, 1] + x[:, 3] / 2) + padh  # bottom right y
     return y
+
+
+def xyn2xy(x, w=640, h=640, padw=0, padh=0):
+    # Convert normalized segments into pixel segments, shape (n,2)
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[:, 0] = w * x[:, 0] + padw  # top left x
+    y[:, 1] = h * x[:, 1] + padh  # top left y
+    return y
+
+
+def segment2box(segment, width=640, height=640):
+    # Convert 1 segment label to 1 box label, applying inside-image constraint, i.e. (xy1, xy2, ...) to (xyxy)
+    x, y = segment.T  # segment xy
+    inside = (x >= 0) & (y >= 0) & (x <= width) & (y <= height)
+    x, y, = x[inside], y[inside]
+    return np.array([x.min(), y.min(), x.max(), y.max()]) if any(x) else np.zeros((1, 4))  # cls, xyxy
+
+
+def segments2boxes(segments):
+    # Convert segment labels to box labels, i.e. (cls, xy1, xy2, ...) to (cls, xywh)
+    boxes = []
+    for s in segments:
+        x, y = s.T  # segment xy
+        boxes.append([x.min(), y.min(), x.max(), y.max()])  # cls, xyxy
+    return xyxy2xywh(np.array(boxes))  # cls, xywh
+
+
+def resample_segments(segments, n=1000):
+    # Up-sample an (n,2) segment
+    for i, s in enumerate(segments):
+        x = np.linspace(0, len(s) - 1, n)
+        xp = np.arange(len(s))
+        segments[i] = np.concatenate([np.interp(x, xp, s[:, i]) for i in range(2)]).reshape(2, -1).T  # segment xy
+    return segments
 
 
 def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):

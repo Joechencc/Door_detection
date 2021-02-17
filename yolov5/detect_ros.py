@@ -459,3 +459,4 @@ if __name__ == '__main__':
             ats = message_filters.ApproximateTimeSynchronizer([image_sub, depth_sub], 10,1 )
             ats.registerCallback(detect)
             rospy.spin()
+
