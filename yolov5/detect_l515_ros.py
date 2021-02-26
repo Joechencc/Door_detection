@@ -23,6 +23,27 @@ import numpy as np
 from cv_bridge import CvBridge
 import math
 
+class rigid_body:
+    lu_x = 0
+    lu_y = 0
+    ru_x = 0
+    ru_y = 0
+    ld_x = 0
+    ld_y = 0
+    rd_x = 0
+    rd_y = 0
+
+class door_body:
+    HT_x = 0
+    HT_y = 0
+    OT_x = 0
+    OT_y = 0
+    HB_x = 0
+    HB_y = 0
+    OB_x = 0
+    OB_y = 0
+
+
 def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
     # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
     shape = img.shape[:2]  # current shape [height, width]
@@ -55,10 +76,31 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh) 
     
-def door_plane(img, xyxy):
-    h_min,h_max = int(xyxy[1]),int(xyxy[3])
-    w_min,w_max = int(xyxy[0]),int(xyxy[2])
+def door_plane(img, door_flap):
+    global handle_position
+    w_min, w_max, h_min, h_max = 0,0,0,0
+
+    # print("door_flap.HB_x:::::"+str(door_flap.HB_x))
+    # print("door_flap.HT_x:::::"+str(door_flap.HT_x))
+    # print("door_flap.OT_x:::.::"+str(door_flap.OT_x))
+    # print("door_flap.OB_x:::::"+str(door_flap.OB_x))
+
+    # print("door_flap.HB_y:::::"+str(door_flap.HB_y))
+    # print("door_flap.HT_y:::::"+str(door_flap.HT_y))
+    # print("door_flap.OT_y:::.::"+str(door_flap.OT_y))
+    # print("door_flap.OB_y:::::"+str(door_flap.OB_y))
+
+    if handle_position == "left":          
+        w_min = max(door_flap.OT_x, door_flap.OB_x)
+        w_max = min(door_flap.HT_x, door_flap.HB_x)
+        h_min = max(door_flap.OT_y, door_flap.HT_y)
+        h_max = min(door_flap.OB_y, door_flap.HB_y)
     #print("img::::::::"+str(img.shape))
+    print("w_min::::::::"+str(w_min))
+    print("w_max::::::::"+str(w_max))
+    print("h_min::::::::"+str(h_min))
+    print("h_max::::::::"+str(h_max))
+
     door_img = img[h_min:h_max,w_min:w_max]
     height, width = h_max - h_min, w_max - w_min
 
@@ -96,7 +138,7 @@ def door_plane(img, xyxy):
        
     while(door_img[int(height_start + i), width_start+1] != 0):
         print("i:::"+str(i))
-        global door_plane_left
+        global door_plane_leftdoor_plane
         door_plane_left = door_img[int(height_start)+i , width_start+1]
         i = i + 5
     i = 0
@@ -109,7 +151,7 @@ def door_plane(img, xyxy):
     
     print("door_plane_left:::::::"+str(door_plane_left))
     print("door_plane_right:::::::"+str(door_plane_right))
-    return door_plane_left, door_plane_right, vh_norm, integrity_flag
+    return door_plane_left, door_plane_right, vh_norm, push_pull_state, integrity_flag
 
 def frame_plane(img, xyxy):
     #print("xyxy:::::::::"+str(xyxy))
@@ -145,7 +187,7 @@ def frame_plane(img, xyxy):
     depth_array_estimate[0,:] = door_img[height_start,width_start:width_end:width_step]
     depth_array_estimate[:,0] = door_img[height_start:height_end:height_step,width_start]
     depth_array_estimate[:,-1] = door_img[height_start:height_end:height_step,width_end]
-    row_indx = 0;
+    row_indx = 0
     for x in range(height_start+height_step, height_end, height_step):
         row_indx +=1
         col_indx = 0
@@ -168,7 +210,8 @@ def frame_plane(img, xyxy):
 
     
 def detect(image, depth):
-
+    global num_door, num_hinge, num_handle, hinge_array, handle_array, handle_position, push_pull_state
+    global door_flap
     #cv_image = CvBridge().imgmsg_to_cv2(image, desired_encoding='bgr8')
     #print("image.shape:::::::::::::::::::::::::::::::::::::::"+str(np.array(image_np).shape))
     source, weights, view_img, save_txt, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
@@ -282,9 +325,21 @@ def detect(image, depth):
             det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
 
             # Print results
-            for c in det[:, -1].unique():
+            for c in det[:, -1].unique(): 
                 n = (det[:, -1] == c).sum()  # detections per class
                 s += f'{n} {names[int(c)]}s, '  # add to string
+                if names[int(c)] == "door_flap":
+                    num_door = int(n)
+                elif names[int(c)] == "hinge":
+                    num_hinge = int(n)
+                    if num_hinge != 0:
+                        push_pull_state = "pull"
+                        push_sign = -1
+                    else:
+                        push_pull_state = "push"
+                        push_sign = 1
+                elif names[int(c)] == "handle":
+                    num_handle = int(n)
 
             # Write results
             for *xyxy, conf, cls in reversed(det):
@@ -296,6 +351,98 @@ def detect(image, depth):
 
                 if save_img or view_img:  # Add bbox to image
                     label = f'{names[int(cls)]} {conf:.2f}'
+                    print("names[int(cls)]:::"+str(names[int(cls)]))
+                    door_frame = door_body()
+                    door_flap_check = rigid_body()
+                    assert num_door == 1
+                    if (names[int(cls)] == "door_flap"):
+                        h_min,h_max = int(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = int(xyxy[0]),int(xyxy[2])
+                        door_flap_check.lu_x = w_min
+                        door_flap_check.lu_y = h_min
+                        door_flap_check.ru_x = w_max
+                        door_flap_check.ru_y = h_min
+                        door_flap_check.ld_x = w_min
+                        door_flap_check.ld_y = h_max
+                        door_flap_check.rd_x = w_max
+                        door_flap_check.rd_y = h_max
+                    elif (names[int(cls)] == "hinge"):
+                        hinge_body = rigid_body()
+                        h_min,h_max = int(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = int(xyxy[0]),int(xyxy[2])
+                        hinge_body.lu_x = w_min
+                        hinge_body.lu_y = h_min
+                        hinge_body.ru_x = w_max
+                        hinge_body.ru_y = h_min
+                        hinge_body.ld_x = w_min
+                        hinge_body.ld_y = h_max
+                        hinge_body.rd_x = w_max
+                        hinge_body.rd_y = h_max
+                        hinge_array = [hinge_array, hinge_body]
+                        if handle_position == "unknown":
+                            if ((hinge_body.lu_x + hinge_body.ru_x) > (door_flap_check.lu_x + door_flap_check.ru_x)):
+                                handle_position = "left"
+                            else:
+                                handle_position = "right"
+                    elif (names[int(cls)] == "handle"):
+                        handle_body = rigid_body()
+                        h_min,h_max = int(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = int(xyxy[0]),int(xyxy[2])
+                        handle_body.lu_x = w_min
+                        handle_body.lu_y = h_min
+                        handle_body.ru_x = w_max
+                        handle_body.ru_y = h_min
+                        handle_body.ld_x = w_min
+                        handle_body.ld_y = h_max
+                        handle_body.rd_x = w_max
+                        handle_body.rd_y = h_max
+                        handle_array = [handle_array, handle_body]
+                        if handle_position == "unknown":
+                            if ((handle_body.lu_x + handle_body.ru_x) < (door_flap_check.lu_x + door_flap_check.ru_x)):
+                                handle_position = "left"
+                            else:
+                                handle_position = "right"
+
+                    elif (names[int(cls)] == "frameHB"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_frame.HB_x = int((w_min+w_max)/2)
+                        door_frame.HB_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "frameHT"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_frame.HT_x = int((w_min+w_max)/2)
+                        door_frame.HT_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "frameOB"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_frame.OB_x = int((w_min+w_max)/2)
+                        door_frame.OB_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "frameOT"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_frame.OT_x = int((w_min+w_max)/2)
+                        door_frame.OT_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "doorHB"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_flap.HB_x = int((w_min+w_max)/2)
+                        door_flap.HB_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "doorHT"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_flap.HT_x = int((w_min+w_max)/2)
+                        door_flap.HT_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "doorOB"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_flap.OB_x = int((w_min+w_max)/2)
+                        door_flap.OB_y = int((h_min+h_max)/2)
+                    elif (names[int(cls)] == "doorOT"):
+                        h_min,h_max = float(xyxy[1]),int(xyxy[3])
+                        w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        door_flap.OT_x = int((w_min+w_max)/2)
+                        door_flap.OT_y = int((h_min+h_max)/2)
                     """
                     if (names[int(cls)] == "door"):
                         print("door detected!!!")
@@ -401,10 +548,30 @@ def detect(image, depth):
                         print("angle difference:::::::::::::::"+str(door_belief))
                         
                         #print("xyxy"+str(int(xyxy[0])))"""
+                    print("door_flap.HB_x:::::"+str(door_flap.HB_x))
+                    print("door_flap.HT_x:::::"+str(door_flap.HT_x))
+                    print("door_flap.OT_x:::.::"+str(door_flap.OT_x))
+                    print("door_flap.OB_x:::::"+str(door_flap.OB_x))
+
+                    print("door_flap.HB_y:::::"+str(door_flap.HB_y))
+                    print("door_flap.HT_y:::::"+str(door_flap.HT_y))
+                    print("door_flap.OT_y:::.::"+str(door_flap.OT_y))
+                    print("door_flap.OB_y:::::"+str(door_flap.OB_y))
+
                     plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
        # Print time (inference + NMS)
         print(f'{s}Done. ({t2 - t1:.3f}s)')
+
+        print("handle_position::"+str(handle_position))
+        print("push_pull_state::"+str(push_pull_state))
+
+        pl_left_depth, pl_right_depth, door_pl, push_pull_state, data_integrity = door_plane(im1ss[i], door_flap)
+        if data_integrity == False:
+            continue
+        
+
+
 
        # Stream results
         if view_img:
@@ -444,12 +611,20 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     check_requirements()
     door_belief = 0
-    hinge_position = "unknown"
-    push_pull_state = "closed"
+    handle_position = "unknown"
+    push_pull_state = "unknown"
     door_plane_left = 0
     door_plane_right = 0
     push_sign = 0
+    num_door = 0
+    num_hinge = 0
+    num_handle = 0
+    hinge_array =[]
+    handle_array =[]
+    door_flap = door_body()
+
     rospy.init_node('door_detection', anonymous=True)
+
 
     with torch.no_grad():
         if opt.update:  # update all models (to fix SourceChangeWarning)
