@@ -7,11 +7,11 @@
 
 
 # train and val data as 1) directory: path/images/, 2) file: path/images.txt, or 3) list: [path1/images/, path2/images/]
-train: ../door400/images/train/  # 128 images
-val: ../door400/images/train/  # 128 images
+train: ../door400/data_and_label_feb_24/images/train/  # 128 images
+val: ../door400/data_and_label_feb_24/images/train/  # 128 images
 
 # number of classes
-nc: 10
+nc: 11
 
 # class names
-names: ['handle', 'hinge', 'frameOT', 'frameOB', 'doorHT', 'doorHB', 'doorOT', 'doorOB', 'frameHT', 'frameHB']
+names: ['door_flap','handle', 'hinge', 'frameOT', 'frameOB', 'doorHT', 'doorHB', 'doorOT', 'doorOB', 'frameHT', 'frameHB']

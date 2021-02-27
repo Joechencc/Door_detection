@@ -78,6 +78,7 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     
 def door_plane(img, door_flap):
     global handle_position
+    door_plane_right, door_plane_left = 0,0
     w_min, w_max, h_min, h_max = 0,0,0,0
 
     # print("door_flap.HB_x:::::"+str(door_flap.HB_x))
@@ -126,7 +127,7 @@ def door_plane(img, door_flap):
         integrity_flag = True
     else:
         integrity_flag = False
-        return None, None, None, False
+        return None, None, None, None, False
 
     A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
     _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
@@ -135,17 +136,16 @@ def door_plane(img, door_flap):
     n_vector = min_vh[:3]
     vh_norm =  n_vector / np.linalg.norm(n_vector)
     i = 0
-       
-    while(door_img[int(height_start + i), width_start+1] != 0):
+
+    print("door_img:::::::::"+str(door_img))
+    
+    while(door_plane_left != 0):
         print("i:::"+str(i))
-        global door_plane_leftdoor_plane
         door_plane_left = door_img[int(height_start)+i , width_start+1]
         i = i + 5
     i = 0
     
-    print("height_end:::::"+str(height_end))
     while((door_img[int(height_end - i), width_end-2] != 0) and (height_end - i)>0):
-        global door_plane_right
         door_plane_right = door_img[int(height_end - i), width_end-1]
         i = i + 5
     
