@@ -90,17 +90,33 @@ def door_plane(img, door_flap):
     # print("door_flap.HT_y:::::"+str(door_flap.HT_y))
     # print("door_flap.OT_y:::.::"+str(door_flap.OT_y))
     # print("door_flap.OB_y:::::"+str(door_flap.OB_y))
+    if (not (door_flap.OT_x and door_flap.OB_x and door_flap.HT_x and door_flap.HB_x)):
+        return None, None, None, None, False
 
     if handle_position == "left":          
         w_min = max(door_flap.OT_x, door_flap.OB_x)
         w_max = min(door_flap.HT_x, door_flap.HB_x)
         h_min = max(door_flap.OT_y, door_flap.HT_y)
         h_max = min(door_flap.OB_y, door_flap.HB_y)
+    else:
+        w_min = max(door_flap.HT_x, door_flap.HB_x)
+        w_max = min(door_flap.OT_x, door_flap.OB_x)
+        h_min = max(door_flap.HT_y, door_flap.OT_y)
+        h_max = min(door_flap.HB_y, door_flap.OB_y)
     #print("img::::::::"+str(img.shape))
-    print("w_min::::::::"+str(w_min))
-    print("w_max::::::::"+str(w_max))
-    print("h_min::::::::"+str(h_min))
-    print("h_max::::::::"+str(h_max))
+    # print("w_min::::::::"+str(w_min))
+    # print("w_max::::::::"+str(w_max))
+    # print("h_min::::::::"+str(h_min))
+    # print("h_max::::::::"+str(h_max))
+
+    # xyxy = [0,0,0,0]
+    # (xyxy[1]),(xyxy[3]) = h_min,h_max
+    # (xyxy[0]),(xyxy[2]) = w_min,w_max
+    # plot_one_box(xyxy, img, label="label", color=[0,0,0], line_thickness=3)
+
+    # cv2.imshow("door flap", img)
+    
+    # cv2.waitKey(3000)
 
     door_img = img[h_min:h_max,w_min:w_max]
     height, width = h_max - h_min, w_max - w_min
@@ -137,9 +153,9 @@ def door_plane(img, door_flap):
     vh_norm =  n_vector / np.linalg.norm(n_vector)
     i = 0
 
-    print("door_img:::::::::"+str(door_img))
+    # print("door_img:::::::::"+str(door_img))
     
-    while(door_plane_left != 0):
+    while(door_plane_left == 0):
         print("i:::"+str(i))
         door_plane_left = door_img[int(height_start)+i , width_start+1]
         i = i + 5
@@ -149,69 +165,116 @@ def door_plane(img, door_flap):
         door_plane_right = door_img[int(height_end - i), width_end-1]
         i = i + 5
     
-    print("door_plane_left:::::::"+str(door_plane_left))
-    print("door_plane_right:::::::"+str(door_plane_right))
+    # print("door_plane_left:::::::"+str(door_plane_left))
+    # print("door_plane_right:::::::"+str(door_plane_right))
     return door_plane_left, door_plane_right, vh_norm, push_pull_state, integrity_flag
 
-def frame_plane(img, xyxy):
+def frame_plane(img, door_frame):
     #print("xyxy:::::::::"+str(xyxy))
-    h_min,h_max = int(xyxy[1]),int(xyxy[3])
-    w_min,w_max = int(xyxy[0]),int(xyxy[2])
-    door_img = img[h_min:h_max, w_min:w_max]
-    height, width = door_img.shape[0], door_img.shape[1]
-    #print("door_img:::::"+str(door_img.shape))
-    #print("height, width:::::"+str(height)+","+str(width))
+    global handle_position
+    lu_x, lu_y, ld_x, ld_y, ru_x, ru_y, rd_x, rd_y = 0,0,0,0,0,0,0,0
+    if (not (door_frame.OT_x and door_frame.OB_x and door_frame.HT_x and door_frame.HB_x)):
+        return None, None, None, False
+    if handle_position == "left":          
+        lu_x = door_frame.OT_x
+        lu_y = door_frame.OT_y
+        ld_x = door_frame.OB_x
+        ld_y = door_frame.OB_y
+        ru_x = door_frame.HT_x
+        ru_y = door_frame.HT_y
+        rd_x = door_frame.HB_x
+        rd_y = door_frame.HB_y
+    else:
+        lu_x = door_frame.HT_x
+        lu_y = door_frame.HT_y
+        ld_x = door_frame.HB_x
+        ld_y = door_frame.HB_y
+        ru_x = door_frame.OT_x
+        ru_y = door_frame.OT_y
+        rd_x = door_frame.OB_x
+        rd_y = door_frame.OB_y
+        
+    # print("lu_x::::"+str(lu_x))
+    # print("lu_y::::"+str(lu_y))
+    # print("ld_x::::"+str(ld_x))
+    # print("ld_y::::"+str(ld_y))
+    # print("ru_x::::"+str(ru_x))
+    # print("ru_y::::"+str(ru_y))
+    # print("rd_x::::"+str(rd_x))
+    # print("rd_y::::"+str(rd_y))
 
-    sample_number_height, height_param, height_start = 10, 1, 0
-    height_step = math.floor(height_param* height / sample_number_height)
-    height_end = height_start+height_step* sample_number_height -1
+    ######### left sampling #########
+    sample_number_left, left_param, left_start_x, left_start_y = 10, 1, ld_x, ld_y
+    left_delta_x = lu_x - ld_x
+    left_delta_y = lu_y - ld_y
 
+    left_x_step = math.floor(left_param* left_delta_x / sample_number_left)
+    left_y_step = math.floor(left_param* left_delta_y / sample_number_left)
 
-    sample_number_width, width_param, width_start = 10, 1, 0
-    width_step = math.floor(width_param* width / sample_number_width)
-    width_end = width_start+width_step* sample_number_width -1
+    left_end_x = left_start_x+left_x_step* sample_number_left -1
+    left_end_y = left_start_y+left_y_step* sample_number_left -1
+
+    ######### right sampling #########
+    sample_number_right, right_param, right_start_x, right_start_y = 10, 1, rd_x, rd_y
+    right_delta_x = ru_x - rd_x
+    right_delta_y = ru_y - rd_y
+
+    right_x_step = math.floor(right_param* right_delta_x / sample_number_right)
+    right_y_step = math.floor(right_param* right_delta_y / sample_number_right)
+
+    right_end_x = right_start_x+right_x_step* sample_number_right -1
+    right_end_y = right_start_y+right_y_step* sample_number_right -1
+
+    #################################
 
     # A_matrix
-    #print("width_step::::::::::::::::"+str(width_step))
-    #print("height_step::::::::::::::::"+str(height_step))
-    height_array = np.array([x for x in range(height_start, height_end, height_step) for y in range(width_start, width_end, width_step)])
-    width_array = np.array([x for y in range(width_start, width_end, width_step) for x in range(height_start, height_end, height_step)])
+    left_x_array = np.array([x for x in range(left_start_x, left_end_x, left_x_step)])
+    left_y_array = np.array([y for y in range(left_start_y, left_end_y, left_y_step)])
+    right_x_array = np.array([x for x in range(right_start_x, right_end_x, right_x_step)])
+    right_y_array = np.array([y for y in range(right_start_y, right_end_y, right_y_step)])
 
     # Depth Estimate
-    depth_lu = door_img[height_start, width_start]
-    depth_ru = door_img[height_start, width_end]
-    depth_ld = door_img[height_end, width_start]
-    depth_rd = door_img[height_end, width_end]
+    depth_left = img[left_y_array, left_x_array]
+    depth_right = img[right_y_array, right_x_array]
 
-    depth_array_estimate = np.zeros((sample_number_height, sample_number_width), dtype = door_img.dtype)
-    depth_array_estimate[0,:] = door_img[height_start,width_start:width_end:width_step]
-    depth_array_estimate[:,0] = door_img[height_start:height_end:height_step,width_start]
-    depth_array_estimate[:,-1] = door_img[height_start:height_end:height_step,width_end]
-    row_indx = 0
-    for x in range(height_start+height_step, height_end, height_step):
-        row_indx +=1
-        col_indx = 0
-        for y in range(width_start+width_step, width_end-width_step, width_step):
-            col_indx+=1
-            depth_array_estimate[row_indx,col_indx] = door_img[x,y]
+    ones_array_left = np.ones_like(depth_left)
+    ones_array_right = np.ones_like(depth_right)
 
-    depth_array = depth_array_estimate.flatten()
-    ones_array = np.ones_like(width_array)
-    assert len(height_array) == len(width_array) == len(depth_array)
+    # depth_array_estimate = np.zeros((sample_number_height, sample_number_width), dtype = door_img.dtype)
+    # depth_array_estimate[0,:] = door_img[height_start,width_start:width_end:width_step]
+    # depth_array_estimate[:,0] = door_img[height_start:height_end:height_step,width_start]
+    # depth_array_estimate[:,-1] = door_img[height_start:height_end:height_step,width_end]
+    # row_indx = 0
+    # for x in range(height_start+height_step, height_end, height_step):
+    #     row_indx +=1
+    #     col_indx = 0
+    #     for y in range(width_start+width_step, width_end-width_step, width_step):
+    #         col_indx+=1
+    #         depth_array_estimate[row_indx,col_indx] = door_img[x,y]
+
+    # depth_array = depth_array_estimate.flatten()
+    # ones_array = np.ones_like(width_array)
+    assert len(left_x_array) == len(left_y_array) == len(depth_left)
+    assert len(right_x_array) == len(right_y_array) == len(depth_right)
+
+    integrity_flag = True
 
     # Stack A matrix
-    A_matrix = np.vstack((height_array, width_array,depth_array, ones_array)).T
+    A_matrix_left = np.vstack((left_y_array, left_x_array, depth_left, ones_array_left)).T
+    A_matrix_right = np.vstack((right_y_array, right_x_array, depth_right, ones_array_right)).T
+    A_matrix = np.hstack((A_matrix_left, A_matrix_right))
+
     _, s, vh = np.linalg.svd(A_matrix, full_matrices = False)
     min_idx = np.argmin(s)
     min_vh = vh[:,min_idx]
     n_vector = min_vh[:3]
     vh_norm =  n_vector / np.linalg.norm(n_vector)
-    return door_img[int((height_start+height_end)/2), width_start], door_img[int((height_start+height_end)/2), width_end], vh_norm
+    return img[int((left_start_y+left_end_y)/2), left_start_x], img[int((right_start_y+right_end_y)/2), right_start_x], vh_norm, integrity_flag
 
     
 def detect(image, depth):
     global num_door, num_hinge, num_handle, hinge_array, handle_array, handle_position, push_pull_state
-    global door_flap
+    global door_flap, door_frame
     #cv_image = CvBridge().imgmsg_to_cv2(image, desired_encoding='bgr8')
     #print("image.shape:::::::::::::::::::::::::::::::::::::::"+str(np.array(image_np).shape))
     source, weights, view_img, save_txt, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
@@ -351,8 +414,7 @@ def detect(image, depth):
 
                 if save_img or view_img:  # Add bbox to image
                     label = f'{names[int(cls)]} {conf:.2f}'
-                    print("names[int(cls)]:::"+str(names[int(cls)]))
-                    door_frame = door_body()
+                    # print("names[int(cls)]:::"+str(names[int(cls)]))
                     door_flap_check = rigid_body()
                     assert num_door == 1
                     if (names[int(cls)] == "door_flap"):
@@ -411,8 +473,10 @@ def detect(image, depth):
                     elif (names[int(cls)] == "frameHT"):
                         h_min,h_max = float(xyxy[1]),int(xyxy[3])
                         w_min,w_max = float(xyxy[0]),int(xyxy[2])
+                        # print("w_min,w_max"+str(w_min)+","+str(w_max))
                         door_frame.HT_x = int((w_min+w_max)/2)
                         door_frame.HT_y = int((h_min+h_max)/2)
+                        # print("HT_x::::::::"+str(door_frame.HT_x))
                     elif (names[int(cls)] == "frameOB"):
                         h_min,h_max = float(xyxy[1]),int(xyxy[3])
                         w_min,w_max = float(xyxy[0]),int(xyxy[2])
@@ -548,27 +612,48 @@ def detect(image, depth):
                         print("angle difference:::::::::::::::"+str(door_belief))
                         
                         #print("xyxy"+str(int(xyxy[0])))"""
-                    print("door_flap.HB_x:::::"+str(door_flap.HB_x))
-                    print("door_flap.HT_x:::::"+str(door_flap.HT_x))
-                    print("door_flap.OT_x:::.::"+str(door_flap.OT_x))
-                    print("door_flap.OB_x:::::"+str(door_flap.OB_x))
+                    # print("door_flap.HB_x:::::"+str(door_flap.HB_x))
+                    # print("door_flap.HT_x:::::"+str(door_flap.HT_x))
+                    # print("door_flap.OT_x:::.::"+str(door_flap.OT_x))
+                    # print("door_flap.OB_x:::::"+str(door_flap.OB_x))
 
-                    print("door_flap.HB_y:::::"+str(door_flap.HB_y))
-                    print("door_flap.HT_y:::::"+str(door_flap.HT_y))
-                    print("door_flap.OT_y:::.::"+str(door_flap.OT_y))
-                    print("door_flap.OB_y:::::"+str(door_flap.OB_y))
-
+                    # print("door_flap.HB_y:::::"+str(door_flap.HB_y))
+                    # print("door_flap.HT_y:::::"+str(door_flap.HT_y))
+                    # print("door_flap.OT_y:::.::"+str(door_flap.OT_y))
+                    # print("door_flap.OB_y:::::"+str(door_flap.OB_y))
                     plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
        # Print time (inference + NMS)
         print(f'{s}Done. ({t2 - t1:.3f}s)')
+        if view_img:
+            pass
+            window_name = 'image'
+            cv2.imshow(window_name, im0)
+            if (cv2.waitKey(30) >= 0): 
+                break
 
-        print("handle_position::"+str(handle_position))
-        print("push_pull_state::"+str(push_pull_state))
+        # print("handle_position::"+str(handle_position))
+        # print("push_pull_state::"+str(push_pull_state))
 
         pl_left_depth, pl_right_depth, door_pl, push_pull_state, data_integrity = door_plane(im1ss[i], door_flap)
         if data_integrity == False:
             continue
+        print("check_1")
+        fr_left_depth, fr_right_depth, frame_pl, data_integrity = frame_plane(im1ss[i], door_frame)
+        if data_integrity == False:
+            continue
+
+        dot_product = np.dot(door_pl,frame_pl)
+        angle = push_sign * math.acos(dot_product)
+        print("angle:::"+str(angle))
+        global door_belief
+        if door_belief ==0:
+            door_belief = angle
+        else:
+            door_belief = 0.9 * door_belief+ 0.1* angle
+       
+        print("door_belief:::"+str(90+door_belief/3.14*180))
+        print("hahahahahhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
         
 
 
@@ -622,6 +707,9 @@ if __name__ == '__main__':
     hinge_array =[]
     handle_array =[]
     door_flap = door_body()
+    door_frame = door_body()
+
+    
 
     rospy.init_node('door_detection', anonymous=True)
 
