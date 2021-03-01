@@ -123,13 +123,13 @@ def door_plane(img, door_flap):
 
     sample_number_height, height_param, height_start = 10, 0.6, 20
     height_step = math.floor(height_param* height / sample_number_height)
-    print("height_step:::::::"+str(height_step))
+    # print("height_step:::::::"+str(height_step))
     height_end = height_start+height_step* sample_number_height -1
 
 
     sample_number_width, width_param, width_start = 10, 0.8, 10
     width_step = math.floor(width_param* width / sample_number_width)
-    print("width_step:::::::"+str(width_step))
+    # print("width_step:::::::"+str(width_step))
     if width_step == 0:
         return None, None, True, True
     else:
@@ -325,7 +325,7 @@ def detect(image, depth):
     img = torch.zeros((1, 3, imgsz, imgsz), device=device)  # init img
     _ = model(img.half() if half else img) if device.type != 'cpu' else None  # run once
     cudnn.benchmark = True  # set True to speed up constant image size inference
-    print("source:::::"+str(source))
+    # print("source:::::"+str(source))
       
     #color_arr = np.frombuffer(image.data, np.uint8)
     #image_np = cv2.imdecode(color_arr, cv2.IMREAD_COLOR)
