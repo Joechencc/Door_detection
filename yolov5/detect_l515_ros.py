@@ -663,13 +663,14 @@ def detect(image, depth):
         else:
             door_belief = 0.9 * door_belief+ 0.1* angle
 
-        print("=============================================================")    
+        print("=======================================================================")    
         print("Angle between door flap and door frame is :::"+str(push_sign * (90+door_belief/3.14*180)))
+        print("+ sign represents that it is push door, - represents a pull door")
         print("door_pl :::"+str(door_pl))
         print("door_pl_center :::("+str(0.5*(door_flap.HT_x+ door_flap.OB_x))+", "+str(0.5*(door_flap.HT_y+ door_flap.OB_y))+")")
         print("frame_pl :::"+str(frame_pl))
         print("door_pl_center :::("+str(0.5*(door_frame.HT_x+ door_frame.OB_x))+", "+str(0.5*(door_frame.HT_y+ door_frame.OB_y))+")")
-        print("=============================================================")    
+        print("======================================================================")    
 
         
 
