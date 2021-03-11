@@ -662,8 +662,15 @@ def detect(image, depth):
             door_belief = angle
         else:
             door_belief = 0.9 * door_belief+ 0.1* angle
-       
-        print("door_belief:::"+str(push_sign * (90+door_belief/3.14*180)))
+
+        print("=============================================================")    
+        print("Angle between door flap and door frame is :::"+str(push_sign * (90+door_belief/3.14*180)))
+        print("door_pl :::"+str(door_pl))
+        print("door_pl_center :::("+str(0.5*(door_flap.HT_x+ door_flap.OB_x))+", "+str(0.5*(door_flap.HT_y+ door_flap.OB_y))+")")
+        print("frame_pl :::"+str(frame_pl))
+        print("door_pl_center :::("+str(0.5*(door_frame.HT_x+ door_frame.OB_x))+", "+str(0.5*(door_frame.HT_y+ door_frame.OB_y))+")")
+        print("=============================================================")    
+
         
 
 
@@ -687,7 +694,7 @@ def detect(image, depth):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default='best_corner.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='best.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='data/images', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
