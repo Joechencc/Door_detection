@@ -339,7 +339,7 @@ def detect(image, depth):
     #print("depth_arr::::::::::"+str(np.asarray(depth_arr)))
     #depth_np = cv2.imdecode(depth_arr, cv2.IMREAD_GRAYSCALE)
 
-    im1s = np.expand_dims(depth_arr, axis=0)
+    im1s = np.expand_dims(depth_arr, axis=0) # Depth Frame
     img1 = im1s.copy()
     
     # Letterbox
@@ -667,9 +667,9 @@ def detect(image, depth):
         print("Angle between door flap and door frame is :::"+str(push_sign * (90+door_belief/3.14*180)))
         print("+ sign represents that it is push door, - represents a pull door")
         print("door_pl :::"+str(door_pl))
-        print("door_pl_center :::("+str(0.5*(door_flap.HT_x+ door_flap.OB_x))+", "+str(0.5*(door_flap.HT_y+ door_flap.OB_y))+")")
+        print("door_pl_center :::("+str(0.5*(door_flap.HT_x+ door_flap.OB_x))+", "+str(0.5*(door_flap.HT_y+ door_flap.OB_y))+", "+ str(im1ss[i][int(0.5*(door_flap.HT_y+ door_flap.OB_y)), int(0.5*(door_flap.HT_x+ door_flap.OB_x))])+")")
         print("frame_pl :::"+str(frame_pl))
-        print("door_pl_center :::("+str(0.5*(door_frame.HT_x+ door_frame.OB_x))+", "+str(0.5*(door_frame.HT_y+ door_frame.OB_y))+")")
+        print("frame_pl_center :::("+str(0.5*(door_frame.HT_x+ door_frame.OB_x))+", "+str(0.5*(door_frame.HT_y+ door_frame.OB_y))+")")
         print("======================================================================")    
 
         
@@ -740,7 +740,10 @@ if __name__ == '__main__':
         else:
             depth_sub = message_filters.Subscriber("/camera/aligned_depth_to_color/image_raw", Image, queue_size = 1, buff_size=2**24)
             image_sub = message_filters.Subscriber("/camera/color/image_raw", Image, queue_size = 1, buff_size=2**24)
+            rate = rospy.Rate(30)
             ats = message_filters.ApproximateTimeSynchronizer([image_sub, depth_sub], 10,1 )
             ats.registerCallback(detect)
-            rospy.spin()
+            while not rospy.is_shutdown():
+                rate.sleep()
+                #rospy.spin()
 
