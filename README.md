@@ -10,6 +10,6 @@ Result
 
 The following animation shows door parts detection, including all corners, all door hinges, and handle 
 
-![alt text](resource/animation.gif)
+![alt text](resource/reference.gif)
 
 
